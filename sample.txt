@@ -1,0 +1,49 @@
+// encryption.js
+const crypto = require('crypto');
+
+const SECRET_KEY = 'your-secret-key'; // Use env variable in production
+const ALGORITHM = 'aes-256-cbc';
+const IV_LENGTH = 16;
+
+const encryptData = (data) => {
+  const iv = crypto.randomBytes(IV_LENGTH);
+  const cipher = crypto.createCipheriv(ALGORITHM, Buffer.from(SECRET_KEY), iv);
+  let encrypted = cipher.update(data);
+  encrypted = Buffer.concat([encrypted, cipher.final()]);
+  return iv.toString('hex') + ':' + encrypted.toString('hex');
+};
+
+const decryptData = (encryptedData) => {
+  const [iv, encrypted] = encryptedData.split(':');
+  const decipher = crypto.createDecipheriv(ALGORITHM, Buffer.from(SECRET_KEY), Buffer.from(iv, 'hex'));
+  let decrypted = decipher.update(Buffer.from(encrypted, 'hex'));
+  decrypted = Buffer.concat([decrypted, decipher.final()]);
+  return decrypted.toString();
+};
+
+module.exports = { encryptData, decryptData };
+
+// usage
+const lookupData = [
+  { key: 'aa', value: 'aadhar number' },
+  { key: 'ph', value: 'phone number' },
+];
+
+const encryptedData = lookupData.map((item) => {
+  if (['aa', 'ph'].includes(item.key)) { // encrypt specific keys
+    return { ...item, value: encryptData(item.value) };
+  }
+  return item;
+});
+
+console.log(encryptedData);
+
+// To decrypt
+const decryptedData = encryptedData.map((item) => {
+  if (['aa', 'ph'].includes(item.key)) {
+    return { ...item, value: decryptData(item.value) };
+  }
+  return item;
+});
+
+console.log(decryptedData);

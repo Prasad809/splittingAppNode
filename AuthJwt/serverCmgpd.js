@@ -1,7 +1,8 @@
 const lookUpDataList=[
     { key : 1,value:"aadhar Number"},
     { key : 2,value:"phone Number"},
-    { key : 3,value:"account Number"}
+    { key : 3,value:"account Number"},
+    {key:4,value:"password"}
 ]
 
 const cmgpd=async(req,res)=>{
