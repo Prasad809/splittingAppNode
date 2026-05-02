@@ -22,33 +22,68 @@ const createGroup = async (req, res) => {
 
 const addMembers = async (req, res) => {
     try {
-        const { groupId, userId ,addedBy } = req.body;
-        if (!groupId || !userId || !addedBy) {
-            return res.json({ status: false, message: [{ userId: "Something went wrong,Bad Request" }] }).status(400);
-        }
-        await db.query(
-            "INSERT INTO groupMembers (groupId,userId,status,joinedAt) VALUES (?,?,?,?)",
-            [groupId, userId, "PENDING", new Date()]);
+        const { groupId, userId, addedBy } = req.body;
 
-        const [group] = await db.query("SELECT groupName FROM memberGroup WHERE id = ?", [groupId]);
-        const [user] = await db.query("SELECT name FROM users WHERE id = ?", [addedBy]);
+        if (!groupId || !userId || !addedBy) {
+            return res.status(400).json({
+                status: false,
+                message: [{ description: "Something went wrong, Bad Request" }]
+            });
+        }
+
+        // 🔍 Check if already exists
+        const [existing] = await db.query(
+            "SELECT id FROM groupMembers WHERE groupId = ? AND userId = ?",
+            [groupId, userId]
+        );
+
+        if (existing.length > 0) {
+            return res.status(200).json({
+                status: false,
+                message: [{ description: "User already exists in this group" }]
+            });
+        }
+
+        // ✅ Insert if not exists
+        await db.query(
+            "INSERT INTO groupMembers (groupId, userId, status, joinedAt) VALUES (?,?,?,?)",
+            [groupId, userId, "PENDING", new Date()]
+        );
+
+        const [group] = await db.query(
+            "SELECT groupName FROM memberGroup WHERE id = ?",
+            [groupId]
+        );
+
+        const [user] = await db.query(
+            "SELECT name FROM users WHERE id = ?",
+            [addedBy]
+        );
+
         const groupName = group.length ? group[0].groupName : "Unknown Group";
         const userName = user.length ? user[0].name : "Unknown Person";
 
-        const message = `You Invited to Group (${groupName}) by Your friend  ${userName}.`;
+        const message = `You Invited to Group (${groupName}) by Your friend ${userName}.`;
+
         await db.query(
             "INSERT INTO notifications (userId, message, groupId, referenceId, isRead, createdAt) VALUES (?,?,?,?,?,?)",
             [userId, message, groupId, addedBy, "N", new Date()]
         );
 
-        return res.json({ status: true, message: [{ description: "Sent Request Successfully." }] }).status(200);
+        return res.status(200).json({
+            status: true,
+            message: [{ description: "Sent Request Successfully." }]
+        });
+
     } catch (error) {
         console.log(error);
-        
-        return res.json({ status: false, message: [{ description: "Internal Server Problem" }] }).status(500);
+
+        return res.status(500).json({
+            status: false,
+            message: [{ description: "Internal Server Problem" }]
+        });
     }
 };
-
 
 const groupsList = async (req, res) => {
     try {
@@ -59,13 +94,13 @@ const groupsList = async (req, res) => {
             JOIN groupMembers gm ON mg.id = gm.groupId
             WHERE gm.userId = ?
         `, [userId]);
-
+        const uniqueGroups = [...new Map(groups.map(item => [item.groupId, item])).values()];
         return res.status(200).json({
             status: true,
             totalGroups: groups.length,
-            groups
+            groups:uniqueGroups
         });
-    } catch (error) {
+    } catch (error) {        
         return res.json({ status: false, message: [{ description: "Internal Server Problem" }] }).status(500);
     }
 };

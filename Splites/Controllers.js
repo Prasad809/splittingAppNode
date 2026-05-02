@@ -39,7 +39,7 @@ const userList = async (req, res) => {
         return res.status(200).json({
             status: true,
             message: [{ description: "user Details Retrieved successfully" }],
-            users:users
+            users:users.map(({ id, name, email, phone }) => ({id,name,email,phone}))
         });
 
     } catch (error) {
