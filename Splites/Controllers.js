@@ -72,6 +72,7 @@ const getGroupTransactions = async (req, res) => {
                 g.groupName,
                 e.paidBy,
                 u.name AS userName,
+                e.description,
                 e.amount,
                 e.createdAt
              FROM expenses e
@@ -166,5 +167,86 @@ const getUserTransactions = async (req, res) => {
     }
 };
 
+const getExpenseSummary = async (req, res) => {
+    try {
+        const { groupId } = req.body;
 
-module.exports = { paidAmount,userList,getGroupTransactions,getUserTransactions};
+        if (!groupId) {
+            return res.status(400).json({
+                status: false,
+                message: "groupId is required"
+            });
+        }
+
+        // 1️⃣ Get all expenses
+        const [expenses] = await db.query(
+            `SELECT id, paidBy, amount 
+             FROM expenses 
+             WHERE groupId = ?`,
+            [groupId]
+        );
+
+        // 2️⃣ Get all members of group
+        const [members] = await db.query(
+            `SELECT userId, u.name 
+             FROM groupMembers gm
+             JOIN users u ON u.id = gm.userId
+             WHERE gm.groupId = ?`,
+            [groupId]
+        );
+
+        // 3️⃣ Total amount
+        const totalAmount = expenses.reduce((sum, e) => sum + Number(e.amount), 0);
+
+        const memberCount = members.length || 1;
+        const sharePerPerson = totalAmount / memberCount;
+
+        // 4️⃣ Calculate how much each user paid
+        const paidMap = {};
+
+        expenses.forEach(exp => {
+            if (!paidMap[exp.paidBy]) {
+                paidMap[exp.paidBy] = 0;
+            }
+            paidMap[exp.paidBy] += Number(exp.amount);
+        });
+
+        // 5️⃣ Build balance sheet
+        const balances = members
+            .map(member => {
+                const paid = paidMap[member.userId] || 0;
+                const balance = paid - sharePerPerson;
+
+                return {
+                    userId: member.userId,
+                    name: member.name,
+                    paid,
+                    share: sharePerPerson,
+                    balance
+                };
+            })
+            .filter(
+                (item, index, arr) =>
+                    arr.findIndex(x => x.userId === item.userId) === index
+            );
+        return res.status(200).json({
+            status: true,
+            data: {
+                groupId,
+                totalAmount,
+                sharePerPerson,
+                balances
+            }
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
+
+module.exports = { paidAmount,userList,getGroupTransactions,getUserTransactions,getExpenseSummary };

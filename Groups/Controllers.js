@@ -47,7 +47,7 @@ const addMembers = async (req, res) => {
         // ✅ Insert if not exists
         await db.query(
             "INSERT INTO groupMembers (groupId, userId, status, joinedAt) VALUES (?,?,?,?)",
-            [groupId, userId, "PENDING", new Date()]
+            [groupId, userId, "SENT", new Date()]
         );
 
         const [group] = await db.query(
@@ -85,15 +85,55 @@ const addMembers = async (req, res) => {
     }
 };
 
+const updateStatusToPending = async (req, res) => {
+    try {
+        const { groupId, userId } = req.body;
+
+        if (!groupId || !userId) {
+            return res.status(400).json({
+                status: false,
+                message: [{ description: "groupId and userId required" }]
+            });
+        }
+
+        const [result] = await db.query(
+            `UPDATE groupMembers 
+             SET status = 'PENDING' 
+             WHERE groupId = ? AND userId = ? AND status = 'SENT'`,
+            [groupId, userId]
+        );        
+        if (result.affectedRows === 0) {
+            return res.status(200).json({
+                status: false,
+                message: [{ description: "No SENT record found to update" }]
+            });
+        }
+
+        return res.status(200).json({
+            status: true,
+            message: [{ description: "Status updated to PENDING successfully" }]
+        });
+
+    } catch (error) {
+        console.log(error);
+        return res.status(500).json({
+            status: false,
+            message: [{ description: "Internal Server Problem" }]
+        });
+    }
+};
+
 const groupsList = async (req, res) => {
     try {
         const { userId } = req.body;
-         const [groups] = await db.query(`
-            SELECT mg.id AS groupId, mg.groupName, mg.description
-            FROM memberGroup mg
-            JOIN groupMembers gm ON mg.id = gm.groupId
-            WHERE gm.userId = ?
-        `, [userId]);
+        const [groups] = await db.query(`
+        SELECT mg.id AS groupId, mg.groupName, mg.description
+        FROM memberGroup mg
+        JOIN groupMembers gm ON mg.id = gm.groupId
+        WHERE gm.userId = ? 
+        AND gm.status = 'APPROVED'
+    `, [userId]);
+        
         const uniqueGroups = [...new Map(groups.map(item => [item.groupId, item])).values()];
         return res.status(200).json({
             status: true,
@@ -123,11 +163,11 @@ const groupbelongMemberList = async (req, res) => {
             WHERE gm.groupId = ? AND gm.status = 'APPROVED'
             ORDER BY gm.joinedAt
         `, [groupId]);
-
+        const uniqueMembers = [...new Map(members.map(item => [item.userId, item])).values()];
         return res.status(200).json({
             status: true,
             totalMembers: members.length,
-            members
+            members:uniqueMembers
         });
 
     } catch (error) {
@@ -192,7 +232,6 @@ const notifications = async (req, res) => {
             SELECT * FROM notifications
             WHERE userId = ?
         `, [userId]);
-
         if (result.length > 0) {
             return res.status(200).json({
                 status: true,
@@ -253,9 +292,49 @@ const markNotificationAsRead = async (req, res) => {
     }
 };
 
+const getPendingRequests = async (req, res) => {
+    try {
+        const { groupId } = req.body;
+
+        if (!groupId) {
+            return res.status(400).json({
+                status: false,
+                message: "groupId is required"
+            });
+        }
+
+        const [requests] = await db.query(`
+            SELECT 
+                gm.userId,
+                u.name,
+                u.email,
+                u.phone,
+                gm.status
+            FROM groupMembers gm
+            JOIN users u ON u.id = gm.userId
+            WHERE gm.groupId = ?
+            AND gm.status = 'PENDING'
+        `, [groupId]);
+        const uniqueRequests = [...new Map(requests.map(item => [item.userId, item])).values()];
+
+        return res.status(200).json({
+            status: true,
+            total: requests.length,
+            requests:uniqueRequests
+        });
+
+    } catch (error) {
+        console.error(error);
+        return res.status(500).json({
+            status: false,
+            message: "Internal Server Error"
+        });
+    }
+};
 
 
 
 
 
-module.exports = { createGroup , addMembers,groupsList, groupbelongMemberList,approveMember,notifications,markNotificationAsRead};
+
+module.exports = { createGroup , addMembers,groupsList, groupbelongMemberList,approveMember,notifications,markNotificationAsRead,updateStatusToPending ,getPendingRequests};

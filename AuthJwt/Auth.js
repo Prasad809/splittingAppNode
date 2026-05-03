@@ -4,8 +4,8 @@ require('dotenv').config();
 const accessKey = process.env.ACCESS
 const refreshKey = process.env.REFRESH
 
-const btExpiresIn = 2 * 60;        // 2 minutes (in seconds)
-const rtExpiresIn = 10 * 60;        // 10 mintes (in Seconds)
+const btExpiresIn = 4 * 60;        // 4 minutes (in seconds)
+const rtExpiresIn = 20 * 60;        // 20 mintes (in Seconds)
 
 const accessToken = (payload, key) => {
     const accessTkn= jwt.sign(payload, key, {
